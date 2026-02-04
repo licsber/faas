@@ -14,6 +14,55 @@
 
 ---
 
+## 🚀 预构建镜像部署（推荐国内用户使用）
+
+由于 HuggingFace 在国内访问困难，推荐使用 **GitHub Actions 自动构建**包含完整模型的镜像，推送到 Docker Hub 后在国内服务器直接拉取部署。
+
+### 方案对比
+
+| 部署方式 | 构建时间 | 依赖网络 | 适用场景 |
+|----------|----------|----------|----------|
+| 默认 `make deploy` | 5-10 分钟 | HuggingFace | 海外服务器 |
+| **预构建镜像** | 1-2 分钟 | Docker Hub | **国内服务器** |
+
+### 快速开始
+
+#### 1. Fork 并配置 GitHub Actions
+
+1. Fork 本仓库到你的 GitHub 账号
+2. 添加 Docker Hub 密钥：
+   - `Settings` → `Secrets and variables` → `Actions` → `New repository secret`
+   - 添加 `DOCKER_USERNAME` 和 `DOCKER_PASSWORD`
+
+#### 2. 自动构建
+
+每次推送代码到 `main` 分支，或修改 `functions/nsfw-detector/**` 时，GitHub Actions 会自动：
+- 构建多架构镜像（linux/amd64, linux/arm64）
+- 预下载 HuggingFace 模型到镜像
+- 推送到 Docker Hub
+
+#### 3. 国内服务器部署
+
+```bash
+# 1. 修改 function-prebuilt.yaml 中的镜像地址
+#    image: your-dockerhub-username/faas-nsfw-detector:latest
+
+# 2. 使用预构建镜像部署
+make deploy-prebuilt FUNCTION=nsfw-detector
+```
+
+### 本地构建镜像（可选）
+
+```bash
+# 本地构建并推送到私有仓库
+make build-image FUNCTION=nsfw-detector REGISTRY=your-registry.com
+
+# 然后推送
+docker push your-registry.com/faas-nsfw-detector:latest
+```
+
+---
+
 ## 🌐 国内服务器部署须知
 
 由于网络原因，以下镜像在国内服务器可能无法正常拉取，**建议提前通过镜像代理或其他方式准备好**：

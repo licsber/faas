@@ -54,6 +54,10 @@ help:
 	@echo "  $(YELLOW)make status$(RESET)                 查看远程检测器状态"
 	@echo "  $(YELLOW)make clean$(RESET)                  删除所有检测器"
 	@echo ""
+	@echo "$(GREEN)预构建镜像命令:$(RESET)"
+	@echo "  $(YELLOW)make deploy-prebuilt FUNCTION=xxx$(RESET)       使用预构建镜像部署"
+	@echo "  $(YELLOW)make build-image FUNCTION=xxx$(RESET)           本地构建镜像"
+	@echo ""
 	@echo "$(GREEN)开发命令:$(RESET)"
 	@echo "  $(YELLOW)make new-function NAME=xxx$(RESET)  基于模板创建新检测器"
 	@echo ""
@@ -115,6 +119,43 @@ define _deploy_single
 		--project-name default \
 		--no-pull
 endef
+
+# 使用预构建镜像部署（适合国内服务器）
+deploy-prebuilt:
+ifeq ($(FUNCTION),)
+	@echo "$(RED)错误: 使用预构建镜像时必须指定 FUNCTION$(RESET)"
+	@echo "用法: $(YELLOW)make deploy-prebuilt FUNCTION=nsfw-detector$(RESET)"
+	@exit 1
+endif
+	@echo "$(BLUE)部署 $(FUNCTION) (使用预构建镜像)...$(RESET)"
+	@echo "$(YELLOW)提示: 确保已设置 Docker Hub 镜像地址$(RESET)"
+	@config_file="functions/$(FUNCTION)/function-prebuilt.yaml"; \
+	if [ ! -f "$$config_file" ]; then \
+		echo "$(RED)错误: 预构建配置文件不存在: $$config_file$(RESET)"; \
+		exit 1; \
+	fi; \
+	echo "$(BLUE)>$(RESET) $(NUCTL_PREFIX) nuctl deploy $(FUNCTION) --file $$config_file --namespace $(NAMESPACE)"; \
+	$(NUCTL_PREFIX) nuctl deploy $(FUNCTION) \
+		--file $$config_file \
+		--namespace $(NAMESPACE) \
+		--project-name default
+
+# 手动构建并推送镜像（本地使用）
+build-image:
+ifeq ($(FUNCTION),)
+	@echo "$(RED)错误: 必须指定 FUNCTION$(RESET)"
+	@echo "用法: $(YELLOW)make build-image FUNCTION=nsfw-detector REGISTRY=your-registry$(RESET)"
+	@exit 1
+endif
+	@registry="$(if $(REGISTRY),$(REGISTRY),docker.io/licsber)"; \
+	echo "$(BLUE)构建 $(FUNCTION) 镜像...$(RESET)"; \
+	docker build \
+		-f docker/Dockerfile.$(FUNCTION) \
+		-t $$registry/faas-$(FUNCTION):latest \
+		--platform linux/amd64 \
+		.; \
+	echo "$(GREEN)✓ 镜像构建成功: $$registry/faas-$(FUNCTION):latest$(RESET)"; \
+	echo "$(YELLOW)推送命令: docker push $$registry/faas-$(FUNCTION):latest$(RESET)"
 
 list:
 	@echo "$(BLUE)本地可用函数:$(RESET)"

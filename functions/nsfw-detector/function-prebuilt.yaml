@@ -1,0 +1,77 @@
+# NSFW 检测器 - 使用预构建镜像部署
+# 适用于国内服务器，无需从 HuggingFace 下载模型
+#
+# 使用方法：
+#   1. GitHub Actions 自动构建并推送镜像到 Docker Hub
+#   2. 在国内服务器上拉取镜像：docker pull your-registry/faas-nsfw-detector:latest
+#   3. 使用此配置部署：make deploy FUNCTION=nsfw-detector CONFIG=function-prebuilt.yaml
+
+metadata:
+  name: nsfw-detector
+  namespace: nuclio
+  labels:
+    app: nsfw-detector
+    version: "1"
+    hardware: cpu
+
+spec:
+  runtime: python:3.12
+  handler: main:handler
+  description: "NSFW 图像内容检测服务（预构建镜像版）"
+  
+  # 使用预构建镜像 - 修改为你的镜像地址
+  image: licsber/faas-nsfw-detector:latest
+  
+  # 镜像拉取策略
+  imagePullPolicy: Always
+  
+  # 资源配置
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "3Gi"
+    limits:
+      cpu: "8"
+      memory: "12Gi"
+  
+  # 环境变量
+  env:
+    - name: NSFW_MODEL_NAME
+      value: "Falconsai/nsfw_image_detection"
+    - name: DEVICE
+      value: "cpu"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: HF_HOME
+      value: "/opt/huggingface"
+    - name: OMP_NUM_THREADS
+      value: "1"
+    - name: MKL_NUM_THREADS
+      value: "1"
+    - name: OPENBLAS_NUM_THREADS
+      value: "1"
+    - name: VECLIB_MAXIMUM_THREADS
+      value: "1"
+    - name: NUMEXPR_NUM_THREADS
+      value: "1"
+  
+  # 注意：使用预构建镜像时，不需要 build 部分
+  # 代码通过 volumes 挂载或复制到容器中
+  
+  # 触发器配置
+  triggers:
+    http:
+      kind: http
+      numWorkers: 18
+      workerAvailabilityTimeoutMilliseconds: 10000
+      attributes:
+        maxRequestBodySize: 33554432
+  
+  # 副本数
+  minReplicas: 1
+  maxReplicas: 5
+  
+  # 日志级别
+  loggerSinks:
+    - level: info
+      sink: ""

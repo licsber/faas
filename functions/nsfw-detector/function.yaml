@@ -1,5 +1,7 @@
 # NSFW 检测器 - CPU 版本
-# 用于生产环境或没有 GPU 的场景
+# 使用预构建镜像（包含模型）
+# 镜像构建命令：
+#   docker build -f docker/Dockerfile.nsfw -t your-registry/faas-nsfw-detector:latest .
 
 metadata:
   name: nsfw-detector
@@ -12,17 +14,21 @@ metadata:
 spec:
   runtime: python:3.12
   handler: main:handler
-  description: "NSFW 图像内容检测服务 - CPU 版本"
-
-  # 资源配置 - 充分利用 14GB 内存
+  description: "NSFW 图像内容检测服务 - CPU 版本（预构建镜像）"
+  
+  # 使用预构建镜像（可选）
+  # 如果使用 GitHub Actions 构建的镜像，取消下面这行的注释
+  # image: licsber/faas-nsfw-detector:latest
+  
+  # 资源配置 - 充分利用服务器资源
   resources:
     requests:
       cpu: "500m"
       memory: "3Gi"
     limits:
-      cpu: "8"       # 8 核 CPU 全用上
-      memory: "12Gi"  # 14GB - 2GB 系统预留 = 12GB 给应用
-
+      cpu: "8"
+      memory: "12Gi"
+  
   # 环境变量
   env:
     - name: NSFW_MODEL_NAME
@@ -31,7 +37,10 @@ spec:
       value: "cpu"
     - name: PYTHONUNBUFFERED
       value: "1"
-    # CPU 线程优化：限制各库的线程数，避免多 worker 竞争
+    # 模型缓存路径（预构建镜像中已包含）
+    - name: HF_HOME
+      value: "/opt/huggingface"
+    # CPU 线程优化
     - name: OMP_NUM_THREADS
       value: "1"
     - name: MKL_NUM_THREADS
@@ -42,42 +51,45 @@ spec:
       value: "1"
     - name: NUMEXPR_NUM_THREADS
       value: "1"
-
+  
   # 构建配置
+  # 如果使用预构建镜像，可以注释掉 build 部分
   build:
     path: ./functions/nsfw-detector
     baseImage: python:3.12-slim
     commands:
-      # 安装系统依赖 (OpenCV 需要)
+      # 安装系统依赖
       - apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1 wget git && rm -rf /var/lib/apt/lists/*
       # 配置清华源
       - pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
       - pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
       # 安装 Python 依赖
       - pip install --no-cache-dir torch torchvision transformers Pillow numpy requests
-      # 预下载模型到镜像中（避免运行时下载）
+      # 预下载模型到镜像中
       - mkdir -p /opt/huggingface/models
-      - export HF_HOME=/opt/huggingface && export TRANSFORMERS_CACHE=/opt/huggingface/models && export HF_DATASETS_CACHE=/opt/huggingface/datasets
-      - python3 -c "from transformers import AutoModelForImageClassification, AutoImageProcessor; m='Falconsai/nsfw_image_detection'; AutoImageProcessor.from_pretrained(m, cache_dir='/opt/huggingface/models'); AutoModelForImageClassification.from_pretrained(m, cache_dir='/opt/huggingface/models'); print('Model downloaded to /opt/huggingface/models')"
-      - ls -la /opt/huggingface/models/
-
-  # 触发器配置 - HTTP 触发器
+      - export HF_HOME=/opt/huggingface && export TRANSFORMERS_CACHE=/opt/huggingface/models
+      - python3 -c "from transformers import AutoModelForImageClassification, AutoImageProcessor; m='Falconsai/nsfw_image_detection'; AutoImageProcessor.from_pretrained(m, cache_dir='/opt/huggingface/models'); AutoModelForImageClassification.from_pretrained(m, cache_dir='/opt/huggingface/models'); print('Model downloaded')"
+  
+  # 触发器配置
   triggers:
     http:
       kind: http
-      numWorkers: 18  # 12GB / 600MB ≈ 20，保守设 18 个 worker
+      numWorkers: 18
       workerAvailabilityTimeoutMilliseconds: 10000
       attributes:
-        maxRequestBodySize: 33554432  # 32MB
-        # 不指定 port，让 Nuclio 自动分配
-
-  # 版本管理
-  version: 1
-
-  # 副本数 - Nuclio 根据负载自动扩缩容
+        maxRequestBodySize: 33554432
+  
+  # 副本数
   minReplicas: 1
-  maxReplicas: 5  # 最大 5 个 Pod，每个 16 worker = 80 并发处理能力
-
+  maxReplicas: 5
+  
+  # 平台配置（可选，用于指定架构）
+  platform:
+    attributes:
+      restartPolicy:
+        name: always
+        maximumRetryCount: 3
+  
   # 日志级别
   loggerSinks:
     - level: info
