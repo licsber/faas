@@ -26,9 +26,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
-    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
-
 RUN pip install --no-cache-dir torch torchvision transformers Pillow numpy requests
 
 COPY --from=model-downloader /opt/huggingface /opt/huggingface
