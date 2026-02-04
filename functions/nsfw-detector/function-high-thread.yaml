@@ -1,37 +1,26 @@
-# NSFW 检测器 - CPU 版本
-# 使用预构建镜像（包含模型）
-# 镜像构建命令：
-#   docker build -f docker/Dockerfile.nsfw -t your-registry/faas-nsfw-detector:latest .
+# NSFW 检测器 - 高线程优化版本
+# 策略：减少 worker 数量，增加每个 worker 的线程数
 
 metadata:
   name: nsfw-detector
   namespace: nuclio
   labels:
     app: nsfw-detector
-    version: "1"
-    hardware: cpu
+    version: "high-thread"
 
 spec:
   runtime: python:3.12
   handler: main:handler
-  description: "NSFW 图像内容检测服务 - CPU 版本（预构建镜像）"
+  description: "NSFW 检测 - 高线程优化"
   
-  # 使用预构建镜像（可选）
-  # 如果使用 GitHub Actions 构建的镜像，取消下面这行的注释
-  # image: licsber/faas-nsfw-detector:latest
-  
-  # 资源配置 - CPU/内存 优化比例 1:0.5 (8C:4G)
-  # 测试数据: 实际内存使用 1.6-2.1GB，配置 4GB 保留约 50% 余量
-  # 4GB 可应对更高分辨率图片，避免 OOM
   resources:
     requests:
       cpu: "2"
-      memory: "2Gi"
+      memory: "4Gi"
     limits:
       cpu: "8"
-      memory: "4Gi"
+      memory: "10Gi"
   
-  # 环境变量
   env:
     - name: NSFW_MODEL_NAME
       value: "Falconsai/nsfw_image_detection"
@@ -39,65 +28,51 @@ spec:
       value: "cpu"
     - name: PYTHONUNBUFFERED
       value: "1"
-    # 模型缓存路径（预构建镜像中已包含）
-    - name: HF_HOME
-      value: "/opt/huggingface"
-    # CPU 线程优化 - 8 workers * 1 thread = 8 cores
+    # 关键优化：每个 worker 使用 4 线程
     - name: OMP_NUM_THREADS
-      value: "1"
+      value: "4"
     - name: MKL_NUM_THREADS
-      value: "1"
+      value: "4"
     - name: OPENBLAS_NUM_THREADS
-      value: "1"
+      value: "4"
     - name: VECLIB_MAXIMUM_THREADS
-      value: "1"
+      value: "4"
     - name: NUMEXPR_NUM_THREADS
-      value: "1"
-    # PyTorch 线程配置
+      value: "4"
+    # PyTorch 线程 - 让单个请求可以利用多核
     - name: PYTORCH_NUM_THREADS
-      value: "1"
+      value: "4"
   
-  # 构建配置
-  # 如果使用预构建镜像，可以注释掉 build 部分
   build:
     path: ./functions/nsfw-detector
     baseImage: python:3.12-slim
     commands:
-      # 安装系统依赖
       - apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1 wget git && rm -rf /var/lib/apt/lists/*
-      # 配置清华源
       - pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
       - pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
-      # 安装 Python 依赖
       - pip install --no-cache-dir torch torchvision transformers Pillow numpy requests
-      # 预下载模型到镜像中
       - mkdir -p /opt/huggingface/models
       - export HF_HOME=/opt/huggingface && export TRANSFORMERS_CACHE=/opt/huggingface/models
       - python3 -c "from transformers import AutoModelForImageClassification, AutoImageProcessor; m='Falconsai/nsfw_image_detection'; AutoImageProcessor.from_pretrained(m, cache_dir='/opt/huggingface/models'); AutoModelForImageClassification.from_pretrained(m, cache_dir='/opt/huggingface/models'); print('Model downloaded')"
   
-  # 触发器配置 - 8 workers 对应 8 CPU 核心
-  # 优化后 QPS: ~13 (本地图片), 单请求延迟: ~327ms
   triggers:
     http:
       kind: http
-      numWorkers: 8
-      workerAvailabilityTimeoutMilliseconds: 30000
+      # 2 workers * 4 threads = 8 核心充分利用
+      numWorkers: 2
+      workerAvailabilityTimeoutMilliseconds: 60000
       attributes:
         maxRequestBodySize: 33554432
-        keepAlive: true
   
-  # 副本数 - 单机部署固定为 1
   minReplicas: 1
   maxReplicas: 1
   
-  # 平台配置（可选，用于指定架构）
   platform:
     attributes:
       restartPolicy:
         name: always
         maximumRetryCount: 3
   
-  # 日志级别 - warning 减少日志开销
   loggerSinks:
     - level: warning
       sink: ""
