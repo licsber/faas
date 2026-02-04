@@ -1,0 +1,68 @@
+# 检测器配置模板 - CPU 版本
+# 复制此文件到你的检测器目录并修改以下 TODO 项
+
+metadata:
+  name: your-detector-name        # TODO: 修改为唯一的检测器名称
+  namespace: nuclio
+  labels:
+    app: your-detector-name       # TODO: 修改为你的检测器名称
+    version: "1"
+    hardware: cpu
+
+spec:
+  runtime: python:3.12
+  handler: main:handler
+  description: "在此描述你的检测器功能 - CPU 版本"  # TODO: 修改描述
+
+  # 资源配置
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+  # 环境变量
+  env:
+    - name: MODEL_NAME            # TODO: 修改为你的模型名称
+      value: "your-model-name"
+    - name: DEVICE
+      value: "cpu"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+
+  # 构建配置
+  build:
+    path: ./functions/your-detector-name    # TODO: 修改路径
+    baseImage: python:3.12-slim
+    commands:
+      # 安装系统依赖
+      - apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1 wget git && rm -rf /var/lib/apt/lists/*
+      # 配置清华源
+      - pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+      - pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
+      # 安装 Python 依赖（TODO: 根据你的需求修改）
+      - pip install --no-cache-dir Pillow numpy requests
+      # - pip install --no-cache-dir torch torchvision transformers  # 如需 PyTorch
+
+  # 触发器配置 - HTTP 触发器
+  triggers:
+    http:
+      kind: http
+      numWorkers: 4
+      workerAvailabilityTimeoutMilliseconds: 10000
+      attributes:
+        maxRequestBodySize: 33554432  # 32MB
+
+  # 版本管理
+  version: 1
+
+  # 副本数
+  minReplicas: 1
+  maxReplicas: 10
+
+  # 日志级别
+  loggerSinks:
+    - level: info
+      sink: ""

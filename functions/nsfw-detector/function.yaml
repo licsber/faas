@@ -1,0 +1,68 @@
+# NSFW 检测器 - CPU 版本
+# 用于生产环境或没有 GPU 的场景
+
+metadata:
+  name: nsfw-detector
+  namespace: nuclio
+  labels:
+    app: nsfw-detector
+    version: "1"
+    hardware: cpu
+
+spec:
+  runtime: python:3.12
+  handler: main:handler
+  description: "NSFW 图像内容检测服务 - CPU 版本"
+
+  # 资源配置
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+  # 环境变量
+  env:
+    - name: NSFW_MODEL_NAME
+      value: "Falconsai/nsfw_image_detection"
+    - name: DEVICE
+      value: "cpu"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+
+  # 构建配置
+  build:
+    path: ./functions/nsfw-detector
+    baseImage: python:3.12-slim
+    commands:
+      # 安装系统依赖 (OpenCV 需要)
+      - apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1 wget git && rm -rf /var/lib/apt/lists/*
+      # 配置清华源
+      - pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+      - pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
+      # 安装 Python 依赖
+      - pip install --no-cache-dir torch torchvision transformers Pillow numpy requests
+
+  # 触发器配置 - HTTP 触发器
+  triggers:
+    http:
+      kind: http
+      numWorkers: 4
+      workerAvailabilityTimeoutMilliseconds: 10000
+      attributes:
+        maxRequestBodySize: 33554432  # 32MB
+        # 不指定 port，让 Nuclio 自动分配
+
+  # 版本管理
+  version: 1
+
+  # 副本数
+  minReplicas: 1
+  maxReplicas: 10
+
+  # 日志级别
+  loggerSinks:
+    - level: info
+      sink: ""

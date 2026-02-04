@@ -1,0 +1,87 @@
+# 检测器配置模板 - GPU 版本
+# 复制此文件到你的检测器目录并修改以下 TODO 项
+
+metadata:
+  name: your-detector-name-gpu    # TODO: 修改为唯一的检测器名称（带 -gpu 后缀）
+  namespace: nuclio
+  labels:
+    app: your-detector-name       # TODO: 修改为你的检测器名称
+    version: "1"
+    hardware: gpu
+
+spec:
+  runtime: python:3.12
+  handler: main:handler
+  description: "在此描述你的检测器功能 - GPU 加速版本"  # TODO: 修改描述
+
+  # 资源配置 - GPU
+  resources:
+    requests:
+      cpu: "1"
+      memory: "4Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+
+  # 环境变量
+  env:
+    - name: MODEL_NAME            # TODO: 修改为你的模型名称
+      value: "your-model-name"
+    - name: DEVICE
+      value: "cuda"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: CUDA_VISIBLE_DEVICES
+      value: "0"
+
+  # 构建配置 - 使用 NVIDIA CUDA 基础镜像
+  build:
+    path: ./functions/your-detector-name    # TODO: 修改路径
+    baseImage: nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+    commands:
+      # 安装 Python 3.12
+      - apt-get update && apt-get install -y --no-install-recommends software-properties-common && add-apt-repository -y ppa:deadsnakes/ppa && apt-get update
+      - apt-get install -y --no-install-recommends python3.12 python3-pip python3.12-dev libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1 wget && rm -rf /var/lib/apt/lists/*
+      # 配置清华源
+      - pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+      - pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
+      # 更新 pip
+      - pip install --upgrade pip
+      # 安装 PyTorch CUDA 版本（TODO: 如不需要可删除）
+      - pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu121
+      # 安装其他依赖（TODO: 根据你的需求修改）
+      - pip install --no-cache-dir Pillow numpy requests
+      # - pip install --no-cache-dir transformers
+
+  # 触发器配置 - HTTP 触发器
+  triggers:
+    http:
+      kind: http
+      numWorkers: 2
+      workerAvailabilityTimeoutMilliseconds: 30000
+      attributes:
+        maxRequestBodySize: 33554432
+
+  # 节点选择器 - 确保调度到 GPU 节点
+  nodeSelector:
+    accelerator: nvidia-gpu
+
+  # 容忍度 - 允许调度到带有 taint 的 GPU 节点
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+
+  # 版本管理
+  version: 1
+
+  # 副本数
+  minReplicas: 1
+  maxReplicas: 3
+
+  # 日志级别
+  loggerSinks:
+    - level: info
+      sink: ""
