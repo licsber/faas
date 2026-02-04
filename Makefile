@@ -77,20 +77,28 @@ help:
 dashboard:
 	@echo "$(BLUE)启动 Nuclio Dashboard...$(RESET)"
 ifeq ($(DRYRUN),true)
-	@echo "$(YELLOW)[DRYRUN]$(RESET) $(DOCKER_PREFIX) docker ps -a | grep -q nuclio-dashboard"
 	@echo "$(YELLOW)[DRYRUN]$(RESET) 检查 Dashboard 是否已运行"
+	@echo "$(YELLOW)[DRYRUN]$(RESET) $(DOCKER_PREFIX) docker ps --filter name=nuclio-dashboard --filter status=running -q"
 	@echo "$(YELLOW)[DRYRUN]$(RESET) $(DOCKER_PREFIX) docker run -d -p 8070:8070 -v /var/run/docker.sock:/var/run/docker.sock --name nuclio-dashboard quay.io/nuclio/dashboard:stable-amd64"
 else
-	@if $(DOCKER_PREFIX) docker ps -a | grep -q nuclio-dashboard; then \
+	@container_id=$$($(DOCKER_PREFIX) docker ps --filter name=nuclio-dashboard --filter status=running -q); \
+	if [ -n "$$container_id" ]; then \
 		echo "$(GREEN)✓ Dashboard 已在运行: http://localhost:8070$(RESET)"; \
 	else \
-		echo "> $(DOCKER_PREFIX) docker run -d -p 8070:8070 -v /var/run/docker.sock:/var/run/docker.sock --name nuclio-dashboard quay.io/nuclio/dashboard:stable-amd64"; \
-		$(DOCKER_PREFIX) docker run -d \
-			-p 8070:8070 \
-			-v /var/run/docker.sock:/var/run/docker.sock \
-			--name nuclio-dashboard \
-			quay.io/nuclio/dashboard:stable-amd64; \
-		echo "$(GREEN)✓ Dashboard: http://localhost:8070$(RESET)"; \
+		stopped=$$($(DOCKER_PREFIX) docker ps -a --filter name=nuclio-dashboard --filter status=exited -q); \
+		if [ -n "$$stopped" ]; then \
+			echo "$(YELLOW)检测到 Dashboard 容器已停止，正在启动...$(RESET)"; \
+			$(DOCKER_PREFIX) docker start nuclio-dashboard; \
+			echo "$(GREEN)✓ Dashboard 已启动: http://localhost:8070$(RESET)"; \
+		else \
+			echo "> $(DOCKER_PREFIX) docker run -d -p 8070:8070 -v /var/run/docker.sock:/var/run/docker.sock --name nuclio-dashboard quay.io/nuclio/dashboard:stable-amd64"; \
+			$(DOCKER_PREFIX) docker run -d \
+				-p 8070:8070 \
+				-v /var/run/docker.sock:/var/run/docker.sock \
+				--name nuclio-dashboard \
+				quay.io/nuclio/dashboard:stable-amd64; \
+			echo "$(GREEN)✓ Dashboard 已创建: http://localhost:8070$(RESET)"; \
+		fi; \
 	fi
 endif
 
