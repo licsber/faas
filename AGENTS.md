@@ -211,6 +211,20 @@ curl -X POST http://localhost:$PORT \
 | 构建慢 | PyTorch 等大型依赖下载慢 | 已配置清华源，首次构建仍较慢，请耐心等待 |
 | 端口冲突 | 手动指定端口可能冲突 | 配置中已移除固定端口，使用 Nuclio 自动分配 |
 | GPU 不可用 | CUDA 版本不匹配或 GPU 节点未就绪 | 检查 `nvidia/cuda` 镜像版本与宿主机的兼容性 |
+| `gcr.io` 拉取失败 | 国内网络无法访问 GCR | 提前手动拉取 `gcr.io/iguazio/uhttpc:0.0.3-amd64` 镜像 |
+
+### 国内服务器注意事项
+
+国内服务器可能无法正常拉取以下镜像，建议提前准备：
+
+| 镜像 | 用途 |
+|------|------|
+| `gcr.io/iguazio/uhttpc:0.0.3-amd64` | Nuclio 构建时内部使用 |
+| `quay.io/nuclio/dashboard:stable-amd64` | Nuclio Dashboard |
+| `python:3.12-slim` | CPU 版本基础镜像 |
+| `nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04` | GPU 版本基础镜像 |
+
+详细说明参见 README.md「国内服务器部署须知」章节。
 
 ---
 

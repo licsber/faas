@@ -14,6 +14,34 @@
 
 ---
 
+## 🌐 国内服务器部署须知
+
+由于网络原因，以下镜像在国内服务器可能无法正常拉取，**建议提前通过镜像代理或其他方式准备好**：
+
+| 镜像 | 用途 | 触发时机 |
+|------|------|----------|
+| `gcr.io/iguazio/uhttpc:0.0.3-amd64` | Nuclio 构建时内部使用 | 执行 `make deploy` 时自动拉取 |
+| `quay.io/nuclio/dashboard:stable-amd64` | Nuclio Dashboard | 执行 `make dashboard` 时拉取 |
+| `python:3.12-slim` | CPU 版本基础镜像 | 部署 CPU 函数时拉取 |
+| `nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04` | GPU 版本基础镜像 | 部署 GPU 函数时拉取 |
+
+### 手动拉取示例（需配置代理或使用镜像站）
+
+```bash
+# 方法 1：通过代理拉取后重新打标签
+docker pull gcr.io/iguazio/uhttpc:0.0.3-amd64
+docker pull quay.io/nuclio/dashboard:stable-amd64
+docker pull python:3.12-slim
+docker pull nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+
+# 方法 2：使用国内镜像站（如果可用）
+# 例如阿里云、 DaoCloud 等提供的镜像代理服务
+```
+
+如果拉取失败，部署时会报错：`Error response from daemon: Get "https://gcr.io/v2/": net/http: request canceled while waiting for connection`
+
+---
+
 ## 🚀 快速开始
 
 ### 方式一：在目标服务器上部署（推荐）
