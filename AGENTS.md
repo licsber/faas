@@ -154,6 +154,26 @@ make deploy DRYRUN=true
 1. 直接在目标 Linux AMD64 服务器上运行 `make deploy`
 2. 或在本地使用 x86_64 模拟（如 Colima）：`colima start --arch x86_64`
 
+### 离线镜像准备（可选）
+
+某些环境（如国内网络）可能无法直接拉取 Nuclio 依赖的基础镜像，可提前准备：
+
+```bash
+# 1. 在能访问 gcr.io 的机器上拉取镜像（如本地 Mac）
+docker pull gcr.io/iguazio/uhttpc:0.0.3-amd64
+
+# 2. 保存镜像到文件
+docker save gcr.io/iguazio/uhttpc:0.0.3-amd64 > uhttpc.tar
+
+# 3. 传输到目标服务器
+rsync -rtvhP uhttpc.tar ubuntu@your-server:~
+
+# 4. 在目标服务器上加载镜像
+cat uhttpc.tar | docker load
+```
+
+> 提示：此步骤仅需执行一次，用于准备 Nuclio 构建依赖的基础镜像。
+
 ---
 
 ## 添加新检测器

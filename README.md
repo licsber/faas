@@ -215,6 +215,22 @@ curl -X POST http://localhost:$PORT \
 
 **解决**：必须在目标架构的机器上运行 `make deploy`。
 
+### 基础镜像无法拉取
+
+**原因**：国内网络可能无法访问 `gcr.io` 等镜像仓库。
+
+**解决**：提前在可访问的机器上准备镜像：
+
+```bash
+# 本地拉取并保存
+docker pull gcr.io/iguazio/uhttpc:0.0.3-amd64
+docker save gcr.io/iguazio/uhttpc:0.0.3-amd64 > uhttpc.tar
+
+# 传输到服务器并加载
+rsync -P uhttpc.tar user@server:~
+ssh user@server 'cat uhttpc.tar | docker load'
+```
+
 ### 端口冲突
 
 **解决**：已删除固定端口，Nuclio 自动分配。
