@@ -158,10 +158,10 @@ endif
 	@registry="$(if $(REGISTRY),$(REGISTRY),docker.io/licsber)"; \
 	echo "$(BLUE)构建 $(FUNCTION) 镜像...$(RESET)"; \
 	docker build \
-		-f docker/Dockerfile.$(FUNCTION) \
+		-f functions/$(FUNCTION)/Dockerfile \
 		-t $$registry/faas-$(FUNCTION):latest \
 		--platform linux/amd64 \
-		.; \
+		functions/$(FUNCTION); \
 	echo "$(GREEN)✓ 镜像构建成功: $$registry/faas-$(FUNCTION):latest$(RESET)"; \
 	echo "$(YELLOW)推送命令: docker push $$registry/faas-$(FUNCTION):latest$(RESET)"
 

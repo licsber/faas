@@ -6,12 +6,12 @@ on:
     paths:
       - 'functions/nsfw-detector/**'
       - '.github/workflows/build-image.yml'
-      - 'docker/Dockerfile.nsfw'
+      - 'functions/nsfw-detector/Dockerfile'
   pull_request:
     branches: [main]
     paths:
       - 'functions/nsfw-detector/**'
-      - 'docker/Dockerfile.nsfw'
+      - 'functions/nsfw-detector/Dockerfile'
   workflow_dispatch:
     inputs:
       version:
@@ -74,8 +74,8 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./docker/Dockerfile.nsfw
+          context: ./functions/nsfw-detector
+          file: ./functions/nsfw-detector/Dockerfile
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
