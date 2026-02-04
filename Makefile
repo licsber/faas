@@ -18,6 +18,18 @@ YELLOW := \033[33m
 RED    := \033[31m
 RESET  := \033[0m
 
+# 检测 Docker 权限
+# 如果当前用户无法直接访问 docker，则使用 sudo
+DOCKER_CHECK := $(shell docker ps > /dev/null 2>&1 && echo "ok" || echo "no")
+ifeq ($(DOCKER_CHECK),ok)
+  DOCKER_PREFIX :=
+  NUCTL_PREFIX  :=
+else
+  DOCKER_PREFIX := sudo
+  NUCTL_PREFIX  := sudo
+  $(info $(YELLOW)ℹ️  检测到当前用户没有 Docker 权限，将自动使用 sudo$(RESET))
+endif
+
 # 执行或打印命令的宏
 # 简单命令的执行/打印宏（仅用于单行命令）
 ifeq ($(DRYRUN),true)
@@ -61,15 +73,15 @@ help:
 dashboard:
 	@echo "$(BLUE)启动 Nuclio Dashboard...$(RESET)"
 ifeq ($(DRYRUN),true)
-	@echo "$(YELLOW)[DRYRUN]$(RESET) docker ps -a | grep -q nuclio-dashboard"
+	@echo "$(YELLOW)[DRYRUN]$(RESET) $(DOCKER_PREFIX) docker ps -a | grep -q nuclio-dashboard"
 	@echo "$(YELLOW)[DRYRUN]$(RESET) 检查 Dashboard 是否已运行"
-	@echo "$(YELLOW)[DRYRUN]$(RESET) docker run -d -p 8070:8070 -v /var/run/docker.sock:/var/run/docker.sock --name nuclio-dashboard quay.io/nuclio/dashboard:stable-amd64"
+	@echo "$(YELLOW)[DRYRUN]$(RESET) $(DOCKER_PREFIX) docker run -d -p 8070:8070 -v /var/run/docker.sock:/var/run/docker.sock --name nuclio-dashboard quay.io/nuclio/dashboard:stable-amd64"
 else
-	@if docker ps -a | grep -q nuclio-dashboard; then \
+	@if $(DOCKER_PREFIX) docker ps -a | grep -q nuclio-dashboard; then \
 		echo "$(GREEN)✓ Dashboard 已在运行: http://localhost:8070$(RESET)"; \
 	else \
-		echo "> docker run -d -p 8070:8070 -v /var/run/docker.sock:/var/run/docker.sock --name nuclio-dashboard quay.io/nuclio/dashboard:stable-amd64"; \
-		docker run -d \
+		echo "> $(DOCKER_PREFIX) docker run -d -p 8070:8070 -v /var/run/docker.sock:/var/run/docker.sock --name nuclio-dashboard quay.io/nuclio/dashboard:stable-amd64"; \
+		$(DOCKER_PREFIX) docker run -d \
 			-p 8070:8070 \
 			-v /var/run/docker.sock:/var/run/docker.sock \
 			--name nuclio-dashboard \
@@ -95,8 +107,8 @@ endif
 define _deploy_single
 	@config_file="functions/$(1)/function$(if $(filter true,$(2)),-gpu,).yaml"; \
 	func_name="$(1)$(if $(filter true,$(2)),-gpu,)"; \
-	echo "$(BLUE)>$(RESET) nuctl deploy $$func_name --file $$config_file --path functions/$(1) --namespace $(NAMESPACE)"; \
-	nuctl deploy $$func_name \
+	echo "$(BLUE)>$(RESET) $(NUCTL_PREFIX) nuctl deploy $$func_name --file $$config_file --path functions/$(1) --namespace $(NAMESPACE)"; \
+	$(NUCTL_PREFIX) nuctl deploy $$func_name \
 		--file $$config_file \
 		--path functions/$(1) \
 		--namespace $(NAMESPACE) \
@@ -126,20 +138,20 @@ list:
 status:
 ifeq ($(FUNCTION),)
 	@echo "$(BLUE)查看所有函数状态:$(RESET)"
-	@$(call RUN,nuctl get function -n $(NAMESPACE) 2>/dev/null || echo "$(RED)未找到函数$(RESET)")
+	@$(call RUN,$(NUCTL_PREFIX) nuctl get function -n $(NAMESPACE) 2>/dev/null || echo "$(RED)未找到函数$(RESET)")
 else
 	@echo "$(BLUE)查看 $(FUNCTION) 状态:$(RESET)"
-	@$(call RUN,nuctl get function $(FUNCTION) -n $(NAMESPACE) -o wide 2>/dev/null || \
+	@$(call RUN,$(NUCTL_PREFIX) nuctl get function $(FUNCTION) -n $(NAMESPACE) -o wide 2>/dev/null || \
 		echo "$(RED)函数未找到$(RESET)")
 endif
 
 clean:
 	@echo "$(YELLOW)清理所有检测器...$(RESET)"
-	@functions=$$(nuctl get function -n $(NAMESPACE) -o json 2>/dev/null | python3 -c "import sys,json; data=json.load(sys.stdin); print(' '.join([f.get('metadata',{}).get('name','') for f in data]))" 2>/dev/null); \
+	@functions=$$($(NUCTL_PREFIX) nuctl get function -n $(NAMESPACE) -o json 2>/dev/null | python3 -c "import sys,json; data=json.load(sys.stdin); print(' '.join([f.get('metadata',{}).get('name','') for f in data]))" 2>/dev/null); \
 	for func in $$functions; do \
 		if [ -n "$$func" ]; then \
 			echo "删除: $$func"; \
-			nuctl delete function $$func -n $(NAMESPACE) 2>/dev/null || echo "跳过: $$func"; \
+			$(NUCTL_PREFIX) nuctl delete function $$func -n $(NAMESPACE) 2>/dev/null || echo "跳过: $$func"; \
 		fi; \
 	done
 	@echo "$(GREEN)✓ 清理完成$(RESET)"
