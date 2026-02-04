@@ -14,14 +14,14 @@ spec:
   handler: main:handler
   description: "NSFW 图像内容检测服务 - CPU 版本"
 
-  # 资源配置
+  # 资源配置 - 充分利用 14GB 内存
   resources:
     requests:
       cpu: "500m"
-      memory: "1Gi"
+      memory: "3Gi"
     limits:
-      cpu: "2"
-      memory: "4Gi"
+      cpu: "8"       # 8 核 CPU 全用上
+      memory: "12Gi"  # 14GB - 2GB 系统预留 = 12GB 给应用
 
   # 环境变量
   env:
@@ -30,6 +30,17 @@ spec:
     - name: DEVICE
       value: "cpu"
     - name: PYTHONUNBUFFERED
+      value: "1"
+    # CPU 线程优化：限制各库的线程数，避免多 worker 竞争
+    - name: OMP_NUM_THREADS
+      value: "1"
+    - name: MKL_NUM_THREADS
+      value: "1"
+    - name: OPENBLAS_NUM_THREADS
+      value: "1"
+    - name: VECLIB_MAXIMUM_THREADS
+      value: "1"
+    - name: NUMEXPR_NUM_THREADS
       value: "1"
 
   # 构建配置
@@ -44,12 +55,17 @@ spec:
       - pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
       # 安装 Python 依赖
       - pip install --no-cache-dir torch torchvision transformers Pillow numpy requests
+      # 预下载模型到镜像中（避免运行时下载）
+      - mkdir -p /opt/huggingface/models
+      - export HF_HOME=/opt/huggingface && export TRANSFORMERS_CACHE=/opt/huggingface/models && export HF_DATASETS_CACHE=/opt/huggingface/datasets
+      - python3 -c "from transformers import AutoModelForImageClassification, AutoImageProcessor; m='Falconsai/nsfw_image_detection'; AutoImageProcessor.from_pretrained(m, cache_dir='/opt/huggingface/models'); AutoModelForImageClassification.from_pretrained(m, cache_dir='/opt/huggingface/models'); print('Model downloaded to /opt/huggingface/models')"
+      - ls -la /opt/huggingface/models/
 
   # 触发器配置 - HTTP 触发器
   triggers:
     http:
       kind: http
-      numWorkers: 4
+      numWorkers: 18  # 12GB / 600MB ≈ 20，保守设 18 个 worker
       workerAvailabilityTimeoutMilliseconds: 10000
       attributes:
         maxRequestBodySize: 33554432  # 32MB
@@ -58,9 +74,9 @@ spec:
   # 版本管理
   version: 1
 
-  # 副本数
+  # 副本数 - Nuclio 根据负载自动扩缩容
   minReplicas: 1
-  maxReplicas: 10
+  maxReplicas: 5  # 最大 5 个 Pod，每个 16 worker = 80 并发处理能力
 
   # 日志级别
   loggerSinks:

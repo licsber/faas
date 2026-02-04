@@ -26,21 +26,47 @@ def init_context(context):
     Nuclio 初始化函数 - 在容器启动时调用一次
     """
     global model, processor
+    import os
     
     logger.info("正在初始化 NSFW 检测模型...")
     
     try:
+        import torch
+        
+        # CPU 优化：限制 PyTorch 线程数，避免多 worker 线程竞争
+        # 每个 worker 只用 1 个线程，靠 Nuclio 多 worker 实现并行
+        device = os.getenv("DEVICE", "cpu")
+        if device == "cpu":
+            torch.set_num_threads(1)
+            torch.set_num_interop_threads(1)
+            logger.info("已设置 PyTorch 单线程模式（避免 CPU 线程竞争）")
+        
         # 使用 transformers 的 pipeline 进行 NSFW 检测
         from transformers import AutoModelForImageClassification, AutoImageProcessor
         
         # 使用 Folk-Lab/NSFW-Detect 模型（轻量级，适合 FaaS）
         model_name = os.getenv("NSFW_MODEL_NAME", "Falconsai/nsfw_image_detection")
-        device = os.getenv("DEVICE", "cpu")
+        
+        # 设置本地缓存路径（构建时预下载的模型）
+        cache_dir = "/opt/huggingface/models"
         
         logger.info(f"加载模型: {model_name}, 设备: {device}")
         
-        processor = AutoImageProcessor.from_pretrained(model_name)
-        model = AutoModelForImageClassification.from_pretrained(model_name)
+        # 尝试从本地缓存加载，如果失败则在线加载
+        if os.path.exists(cache_dir):
+            logger.info(f"使用本地模型缓存: {cache_dir}")
+            try:
+                processor = AutoImageProcessor.from_pretrained(model_name, cache_dir=cache_dir, local_files_only=True)
+                model = AutoModelForImageClassification.from_pretrained(model_name, cache_dir=cache_dir, local_files_only=True)
+                logger.info("模型从本地缓存加载成功")
+            except Exception as e:
+                logger.warning(f"本地缓存加载失败: {e}，尝试在线下载...")
+                processor = AutoImageProcessor.from_pretrained(model_name)
+                model = AutoModelForImageClassification.from_pretrained(model_name)
+        else:
+            logger.info("本地缓存不存在，在线下载模型...")
+            processor = AutoImageProcessor.from_pretrained(model_name)
+            model = AutoModelForImageClassification.from_pretrained(model_name)
         
         if device == "cuda" and model.cuda.is_available():
             model = model.to("cuda")
